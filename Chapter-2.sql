@@ -23,7 +23,7 @@ in the following order:
 SELECT empid, YEAR(orderdate) AS orderyear, COUNT(*) AS numorders
 FROM Sales.Orders
 WHERE custid = 71
-GROUP BY empid, YEAR(orderdate)
+GROUP BY empid, YEAR(orderdate)											--Listing 2-1--
 HAVING COUNT(*) > 1
 ORDER BY empid, orderyear;
 
@@ -143,10 +143,134 @@ GROUP BY empid, YEAR(orderdate);
 /*Meaning of HAVING : With the HAVING clause, you can specify a predicate to filter groups as opposed to filtering individual
 rows, which happens in the WHERE phase.*/
 
---HAVING does not return NULL or FALSE Data
+--HAVING does not return NULL or FALSE Data and you can use Aggragate functions in it
 
 SELECT empid, YEAR(orderdate) AS orderyear
 FROM Sales.Orders
 WHERE custid = 71
 GROUP BY empid, YEAR(orderdate)
 HAVING COUNT(*) > 1;
+
+/*SELECT Meaning: The SELECT clause is where you specify the attributes (columns) that you want to return in the result 
+table of the query.*/
+
+/*SELECT Alias: 
+With no manipulation: In Listing 2-1 we have the following expressions: empid, YEAR(orderdate), and COUNT(*) here attribute with no
+manipulation, such as empid, the name of the target attribute is the same as the name of the source attribute, and can use 
+AS clause—for example, empid AS employee_id.
+
+With manipulation: Expressions that do apply manipulation, such as YEAR(orderdate), T-SQL allows a query to return result
+columns with no names in certain cases, I strongly recommend that you alias such expressions as YEAR(orderdate) AS orderyear 
+so that all result attributes have names*/
+
+/*Alias Syntax: <expression> AS <alias> OR <alias> = <expression> (“alias equals expression”) EX: orderyear = YEAR(orderdate) OR
+<expression> <alias> (“expression space alias”) Ex: YEAR(orderdate) orderyear*/
+
+/*Bug in <expression> <alias> (“expression space alias”): It is interesting to note that if by mistake you don’t specify a 
+comma between two column names in the SELECT list, your code won’t fail. Instead, SQL Server will assume that the second name 
+is an alias for the first column name. As an example :*/
+
+SELECT orderid orderdate
+FROM Sales.Orders;
+
+/*Now our query looks like: */
+
+SELECT empid, YEAR(orderdate) AS orderyear, COUNT(*) AS numorders
+FROM Sales.Orders
+WHERE custid = 71
+GROUP BY empid, YEAR(orderdate)
+HAVING COUNT(*) > 1;
+
+/* Proof that SELECT clause is processed after the FROM, WHERE, GROUP BY, and HAVING clauses : using select alias in WHERE :*/
+SELECT orderid, YEAR(orderdate) AS orderyear
+FROM Sales.Orders
+WHERE orderyear > 2006;
+
+/*Solution to above problem: It’s interesting to note that SQL Server is capable of identifying the repeated use of the same
+expression— YEAR(orderdate)—in the query. The expression only needs to be evaluated or calculated once :*/
+SELECT orderid, YEAR(orderdate) AS orderyear
+FROM Sales.Orders						--this same thing is done in Listing 2-1 in select and having clause with COUNT(*) function-- 
+WHERE YEAR(orderdate) > 2006;
+
+/*Can't use SELECT alias in SELECT also : Within the SELECT clause, you are still not allowed to refer 
+to a column alias that was created in the same SELECT clause, regardless of whether the expression that 
+assigns the alias appears to the left or right of the expression that attempts to refer to it. For example,
+the following attempt is invalid.
+*/
+SELECT orderid,
+YEAR(orderdate) AS orderyear,
+orderyear + 1 AS nextyear
+FROM Sales.Orders;
+
+/*Solution of above code: tis will be explained in the section, “All-at-Once Operations.”*/
+SELECT orderid,
+YEAR(orderdate) AS orderyear,
+YEAR(orderdate) + 1 AS nextyear
+FROM Sales.Orders;
+
+/*Why to use DISTICT clause: A SELECT query against the tables can still return a result with duplicate rows. The term “result set” 
+is often used to describe the output of a SELECT query, but a result set doesn’t necessarily qualify as a set in the mathematical 
+sense. For example: */
+
+SELECT empid, YEAR(orderdate)
+FROM Sales.Orders
+WHERE custid = 71;
+
+/*DISTICT clause: to guarantee uniqueness in the result of a SELECT statement. For example:*/
+
+SELECT DISTINCT empid, YEAR(orderdate)
+FROM Sales.Orders
+WHERE custid = 71;
+
+/*Asterisk (*): in the SELECT list to request all attributes from the queried tables instead of listing them explicitly*/
+
+SELECT *
+FROM Sales.Orders;
+
+/*Why asterisk is a bad programming practice in most cases: SQL keeps ordinal positions for columns 
+based on the order in which the columns were specified in the CREATE TABLE statement. By specifying SELECT *, 
+you’re guaranteed to get the columns back in order based on their ordinal positions. Client applications can refer to columns in
+the result by their ordinal positions (a bad practice in its own right) instead of by name. Any schema
+changes applied to the table—such as adding or removing columns, rearranging their order, and so
+on—might result in failures in the client application, or even worse, in logical bugs that will go unnoticed.
+By explicitly specifying the attributes that you need, you always get the right ones, as long as
+the columns exist in the table. If a column referenced by the query was dropped from the table, you
+get an error and can fix your code accordingly.*/
+
+--ORDER BY: This clause allows you to sort the rows in the output for presentation purposes
+--Example: this code will sorts the rows in the output by employee ID and order year:
+SELECT empid, YEAR(orderdate) AS orderyear, COUNT(*) AS numorders
+FROM Sales.Orders
+WHERE custid = 71
+GROUP BY empid, YEAR(orderdate)
+HAVING COUNT(*) > 1
+ORDER BY empid, orderyear;
+
+/*Order By unique Features: 
+1) The ORDER BY phase is in fact the only phase in which you can refer to column aliases created in the SELECT phase,
+2)if you define a column alias that is the same as an underlying column name, as in (col1 AS col1), and refer to that alias
+in the ORDER BY clause, the new column is the one that is considered for ordering
+3)you either specify ASC right after the expression, as in orderyear ASC, or don’t specify anything after the expression,
+because ASC is the default
+4)If you want to sort in descending order, you need to specify DESC after the expression, as in orderyear DESC.
+5)Rather than using names of attributes you can use there ordenal positions in the select query, for example:
+ORDER BY empid, orderyear
+you could use:
+ORDER BY 1, 2
+This is considered bad progeamming practice because if in future you change the SELECT query you would get different result
+6)T-SQL allows you to specify elements in the ORDER BY clause that do not appear in the SELECT
+clause, meaning that you can sort by something that you don’t necessarily want to return in the output.
+For example:*/
+SELECT empid, firstname, lastname, country
+FROM HR.Employees
+ORDER BY hiredate;
+/*7) However, when DISTINCT is specified, you are restricted in the ORDER BY list only to elements that
+appear in the SELECT list. The reasoning behind this restriction is that when DISTINCT is specified, a
+single result row might represent multiple source rows; therefore, it might not be clear which of the
+multiple possible values in the ORDER BY expression should be used. Consider the following invalid
+query: */
+
+SELECT DISTINCT country
+FROM HR.Employees
+ORDER BY empid;
+
