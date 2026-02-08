@@ -7,7 +7,7 @@ defines how a query should be processed and the final result achieved*/
 the letter; rather, it is free to physically process a query differently by rearranging processing phases.
 SQL Server can—and in fact, often does—make many shortcuts in the physical processing of a query.*/
 
-USE TSQL2012;
+USE TSQLV6;
 
 /*Logically processing order: In SQL, things are different. Even though the SELECT clause appears first in the query, 
 it is logically processed almost last. The clauses are logically processed
@@ -53,6 +53,8 @@ grab the car keys; bring them to me.” The keyed-in order of the query clauses is
 starts with the SELECT clause. Logical query processing order is similar to how you would provide
 instructions to a robot—with the FROM clause processed first.*/
 
+-------------------------------------------------FROM----------------------------------------------------------
+
 /*Meaning of FROM clause: In this clause, you specify the names of the tables that you want to query 
 and table operators that operate on those tables.*/
 
@@ -72,6 +74,9 @@ With identifiers that do comply with the rules for the format of regular identif
 is optional. For example, a table called OrderDetails residing in the Sales schema can be
 referred to as Sales.OrderDetails or “Sales”.”OrderDetails” or [Sales].[OrderDetails].*/
 
+-------------------------------------------------WHERE----------------------------------------------------------
+
+
 SELECT orderid, empid, orderdate, freight
 FROM Sales.Orders
 WHERE custid = 71;
@@ -83,6 +88,8 @@ the rows returned by the FROM phase. Here WHERE phase filters only orders placed
 It also reduce the network traffic created by returning all possible rows to the caller and filtering on the client side.*/
 
 -- WHERE returns only those rows whose values are TRUE and not FALSE and NULL due to three-valued-logic
+
+-------------------------------------------------GROUP BY----------------------------------------------------------
 
 /*GROUP BY meaning: It allows you to arrange the rows returned by the previous logical query processing phase in groups.
 and the groups are determined by the elements you specify*/
@@ -133,12 +140,15 @@ values. The DISTINCT keyword can be used with other functions as well. For examp
 expression SUM(qty) would return 60, the expression SUM(DISTINCT qty) would return 40. The expression
 AVG(qty) would return 15, whereas the expression AVG(DISTINCT qty) would return 20.*/
 
+
 SELECT
 empid,
 YEAR(orderdate) AS orderyear,
 COUNT(DISTINCT custid) AS numcusts
 FROM Sales.Orders
 GROUP BY empid, YEAR(orderdate);
+
+-------------------------------------------------HAVING----------------------------------------------------------
 
 /*Meaning of HAVING : With the HAVING clause, you can specify a predicate to filter groups as opposed to filtering individual
 rows, which happens in the WHERE phase.*/
@@ -150,6 +160,8 @@ FROM Sales.Orders
 WHERE custid = 71
 GROUP BY empid, YEAR(orderdate)
 HAVING COUNT(*) > 1;
+
+-------------------------------------------------SELECT----------------------------------------------------------
 
 /*SELECT Meaning: The SELECT clause is where you specify the attributes (columns) that you want to return in the result 
 table of the query.*/
@@ -184,13 +196,13 @@ HAVING COUNT(*) > 1;
 /* Proof that SELECT clause is processed after the FROM, WHERE, GROUP BY, and HAVING clauses : using select alias in WHERE :*/
 SELECT orderid, YEAR(orderdate) AS orderyear
 FROM Sales.Orders
-WHERE orderyear > 2006;
+WHERE orderyear > 2021;
 
 /*Solution to above problem: It’s interesting to note that SQL Server is capable of identifying the repeated use of the same
 expression— YEAR(orderdate)—in the query. The expression only needs to be evaluated or calculated once :*/
 SELECT orderid, YEAR(orderdate) AS orderyear
 FROM Sales.Orders						--this same thing is done in Listing 2-1 in select and having clause with COUNT(*) function-- 
-WHERE YEAR(orderdate) > 2006;
+WHERE YEAR(orderdate) > 2021;
 
 /*Can't use SELECT alias in SELECT also : Within the SELECT clause, you are still not allowed to refer 
 to a column alias that was created in the same SELECT clause, regardless of whether the expression that 
@@ -225,7 +237,7 @@ WHERE custid = 71;
 /*Asterisk (*): in the SELECT list to request all attributes from the queried tables instead of listing them explicitly*/
 
 SELECT *
-FROM Sales.Orders;
+FROM Sales.Shippers;
 
 /*Why asterisk is a bad programming practice in most cases: SQL keeps ordinal positions for columns 
 based on the order in which the columns were specified in the CREATE TABLE statement. By specifying SELECT *, 
@@ -236,6 +248,8 @@ on—might result in failures in the client application, or even worse, in logical
 By explicitly specifying the attributes that you need, you always get the right ones, as long as
 the columns exist in the table. If a column referenced by the query was dropped from the table, you
 get an error and can fix your code accordingly.*/
+
+-------------------------------------------------ORDER BY----------------------------------------------------------
 
 --ORDER BY: This clause allows you to sort the rows in the output for presentation purposes
 --Example: this code will sorts the rows in the output by employee ID and order year:
@@ -274,3 +288,101 @@ SELECT DISTINCT country
 FROM HR.Employees
 ORDER BY empid;
 
+------------------------------------------TOP----------------------------------------
+
+--TOP filter is from version 7.0
+/*Meaning: The TOP option is a proprietary T-SQL feature that allows you to limit the number or percentage of rows that your query returns.*/
+
+SELECT TOP (5) orderid, orderdate, custid, empid
+FROM Sales.Orders								----Listing 2-5-----
+ORDER BY orderdate DESC;
+--above program to return from the Orders table the five most recent orders
+
+/* TOP depends on: TOP relies on ORDER BY to give it its filtering-related meaning. This means that if DISTINCT is specified in the SELECT clause,
+the TOP filter is evaluated after duplicate rows have been removed*/
+
+/*PERCENT Keyword: You can use the TOP option with the PERCENT keyword, in which case SQL Server calculates the
+number of rows to return based on a percentage of the number of qualifying rows, rounded up.*/
+
+SELECT TOP(1) PERCENT orderid, orderdate, custid, empid
+FROM Sales.Orders										
+ORDER BY orderdate DESC;
+
+/*Top without ORDER BY: that you are even allowed to use TOP in a query without an ORDER BY clause, and then the ordering is completely 
+undefined—SQL Server returns whichever n rows it happens to physically access first, where n is the number of requested rows*/
+
+/*Problem with above query: Notice in the output for the query in Listing 2-5 that the minimum order date in the rows returned is May 5, 2022,
+and one row in the output has that date. Other rows in the table might have the same order date, and with the existing non-unique ORDER BY list, 
+there is no guarantee which of those will be returned.*/
+
+/*Ties: If you want the query to be deterministic, you need to make the ORDER BY list unique; in other words, add a tiebreaker. For example, 
+you can add orderid DESC to the ORDER BY list as shown in Listing 2-6 so that, in case of ties, the row with the greater order ID will be preferred.*/
+
+SELECT TOP (5) orderid, orderdate, custid, empid
+FROM Sales.Orders								---Listing 2-6---
+ORDER BY orderdate DESC, orderid DESC;
+
+-- Above code is same as Listing 2-5 and Listing 2-6, but Listing 2-6 is deterministic
+
+/*WITH TIES option:besides the five rows that you get back from the query in Listing 2-5, you can ask to return all other rows from the table that
+have the same sort value (order date, in this case) as the last one found (May 5, 2022, in this case). You achieve this by adding the WITH TIES option,
+as shown in the following query:*/
+
+SELECT TOP(5) WITH TIES orderid, orderdate, custid, empid
+FROM Sales.Orders
+ORDER BY orderdate DESC;
+--------------------------------------------OFFSET-FETCH-----------------------------------------------------------------------------------------
+/*Meaning of : By using the OFFSET clause, you can indicate how many rows to skip, and by using the FETCH clause, you can indicate how many 
+rows to filter after the skipped rows and a part of the ORDER BY clause. As an example,*/
+
+SELECT orderid, orderdate, custid, empid
+FROM Sales.Orders
+ORDER BY orderdate, orderid
+OFFSET 50 ROWS FETCH NEXT 25 ROWS ONLY;
+
+--FETCH WITHOUT OFFSET: Use syntax OFFSET 0 ROWS
+--OFFSET without FETCH: It is allowed and in such a case, the query skips the indicated number of rows and returns all remaining rows in the result
+/*syntax for OFFSET-FETCH: The singular and plural forms ROW and ROWS are interchangeable. The idea is to allow you to phrase the filter in an intuitive
+English-like manner. For example, suppose you wanted to fetch only one row; though it would be syntactically valid, it would nevertheless look strange
+if you specified FETCH 1 ROWS. Therefore, you’re allowed to use the form FETCH 1 ROW. The same applies to the OFFSET clause. Also, if you’re not skipping
+any rows (OFFSET 0 ROWS), you may find the term “first” more suitable than “next.” Hence, the forms FIRST and NEXT are interchangeable*/
+
+/* OFFSET-FETCH                | TOP
+Skipping capability			   | PERCENT and WITH TIES options
+OFFSET-FETCH is in all RDBMS   | TOP is Propritory to T-SQL */
+
+
+
+---------------------------------------------------A quick look at window functions--------------------------------------------------------
+
+--Meaning of Window functions: A window function operates on a set of rows exposed to it by the OVER clause.
+/*OVER clause meaning: The OVER clause can restrict the rows in the window by using an optional window partition clause 
+(PARTITION BY). It can define ordering for the calculation (if relevant) using a window order clause (ORDER BY)—not to be confused with 
+the query’s presentation ORDER BY clause.*/
+
+SELECT orderid, custid, val,
+	ROW_NUMBER() OVER(PARTITION BY custid
+					  ORDER BY val) AS rownum
+FROM Sales.OrderValues
+ORDER BY custid, val;
+
+/*Making above query deterministic: Note that the ROW_NUMBER function must produce unique values within each partition. This
+means that even when the ordering value doesn’t increase, the row number still must increase. Therefore,
+if the ROW_NUMBER function’s ORDER BY list is non-unique, as in the preceding example, the
+calculation is nondeterministic. That is, more than one correct result is possible. If you want to make a
+row number calculation deterministic, you must add elements to the ORDER BY list to make it unique.
+For example, in our sample query you can achieve this by adding the orderid attribute as a tiebreaker.*/
+
+
+/*
+ FROM
+ WHERE
+ GROUP BY
+ HAVING
+ SELECT
+	Expressions(Aggregate functions or normal functions like YEAR() or window function)
+	DISTINCT
+ ORDER BY
+	TOP/OFFSET-FETCH
+
+*/
